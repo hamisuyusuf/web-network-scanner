@@ -1,0 +1,425 @@
+{% extends "base.html" %}
+
+{% block title %}Packet Sniffer - Web Network Scanner{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <h1 class="mb-4">
+                <i class="fas fa-eye me-2"></i>
+                Packet Sniffer
+            </h1>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cogs me-2"></i>Capture Configuration
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="sniffer-form">
+                        <div class="mb-3">
+                            <label for="interface" class="form-label">Network Interface</label>
+                            <select class="form-select" id="interface" name="interface">
+                                <option value="">Default Interface</option>
+                            </select>
+                            <div class="form-text">Leave default for automatic selection</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="filter" class="form-label">BPF Filter</label>
+                            <input type="text" class="form-control" id="filter" name="filter" 
+                                   placeholder="tcp port 80">
+                            <div class="form-text">Berkeley Packet Filter expression</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="max-packets" class="form-label">Max Packets</label>
+                            <input type="number" class="form-control" id="max-packets" name="max-packets" 
+                                   value="1000" min="10" max="10000">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="timeout" class="form-label">Timeout (seconds)</label>
+                            <input type="number" class="form-control" id="timeout" name="timeout" 
+                                   value="60" min="10" max="300">
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success" id="start-btn">
+                                <i class="fas fa-play me-1"></i>Start Capture
+                            </button>
+                            <button type="button" class="btn btn-danger" id="stop-btn" disabled>
+                                <i class="fas fa-stop me-1"></i>Stop Capture
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>Statistics
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="stats-container">
+                        <p class="text-muted">No capture session active</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list me-2"></i>Captured Packets
+                    </h5>
+                    <div>
+                        <div id="capture-status" class="badge bg-secondary me-2">Stopped</div>
+                        <button class="btn btn-sm btn-outline-primary" onclick="refreshPackets()">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-success" onclick="exportPackets()">
+                            <i class="fas fa-download"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="packets-container">
+                        <div class="text-center py-5">
+                            <i class="fas fa-eye fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">Configure capture settings and click "Start Capture" to begin</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Export Modal -->
+<div class="modal fade" id="exportModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Export Packets</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="export-format" class="form-label">Format</label>
+                    <select class="form-select" id="export-format">
+                        <option value="json">JSON</option>
+                        <option value="csv">CSV</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="export-filename" class="form-label">Filename</label>
+                    <input type="text" class="form-control" id="export-filename" 
+                           placeholder="capture_data">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="doExport()">Export</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let captureActive = false;
+let packetsRefreshInterval = null;
+let statsRefreshInterval = null;
+
+$(document).ready(function() {
+    loadInterfaces();
+    
+    $('#sniffer-form').on('submit', function(e) {
+        e.preventDefault();
+        startCapture();
+    });
+    
+    $('#stop-btn').on('click', function() {
+        stopCapture();
+    });
+});
+
+function loadInterfaces() {
+    $.get('/api/sniffer/interfaces')
+        .done(function(data) {
+            const select = $('#interface');
+            data.interfaces.forEach(function(iface) {
+                select.append(`<option value="${iface}">${iface}</option>`);
+            });
+        })
+        .fail(function() {
+            console.log('Could not load network interfaces');
+        });
+}
+
+function startCapture() {
+    const captureData = {
+        interface: $('#interface').val() || null,
+        filter: $('#filter').val(),
+        max_packets: parseInt($('#max-packets').val()),
+        timeout: parseInt($('#timeout').val())
+    };
+    
+    $('#start-btn').prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i>Starting...');
+    
+    $.ajax({
+        url: '/api/sniffer/start',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(captureData),
+        success: function(response) {
+            captureActive = true;
+            $('#start-btn').prop('disabled', true);
+            $('#stop-btn').prop('disabled', false);
+            $('#capture-status').removeClass('bg-secondary bg-danger').addClass('bg-success').text('Capturing');
+            
+            showCaptureActive();
+            startRefreshIntervals();
+        },
+        error: function(xhr) {
+            const error = xhr.responseJSON ? xhr.responseJSON.error : 'Unknown error occurred';
+            showError('Failed to start capture: ' + error);
+        },
+        complete: function() {
+            $('#start-btn').html('<i class="fas fa-play me-1"></i>Start Capture');
+        }
+    });
+}
+
+function stopCapture() {
+    $('#stop-btn').prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i>Stopping...');
+    
+    $.ajax({
+        url: '/api/sniffer/stop',
+        method: 'POST',
+        success: function(response) {
+            captureActive = false;
+            $('#start-btn').prop('disabled', false);
+            $('#stop-btn').prop('disabled', true);
+            $('#capture-status').removeClass('bg-success').addClass('bg-secondary').text('Stopped');
+            
+            stopRefreshIntervals();
+            refreshPackets();
+            refreshStats();
+        },
+        error: function(xhr) {
+            const error = xhr.responseJSON ? xhr.responseJSON.error : 'Unknown error occurred';
+            showError('Failed to stop capture: ' + error);
+        },
+        complete: function() {
+            $('#stop-btn').html('<i class="fas fa-stop me-1"></i>Stop Capture');
+        }
+    });
+}
+
+function startRefreshIntervals() {
+    // Refresh packets every 2 seconds during capture
+    packetsRefreshInterval = setInterval(refreshPackets, 2000);
+    // Refresh stats every 1 second during capture  
+    statsRefreshInterval = setInterval(refreshStats, 1000);
+}
+
+function stopRefreshIntervals() {
+    if (packetsRefreshInterval) {
+        clearInterval(packetsRefreshInterval);
+        packetsRefreshInterval = null;
+    }
+    if (statsRefreshInterval) {
+        clearInterval(statsRefreshInterval);
+        statsRefreshInterval = null;
+    }
+}
+
+function refreshPackets() {
+    $.get('/api/sniffer/packets')
+        .done(function(data) {
+            displayPackets(data.packets);
+        })
+        .fail(function() {
+            console.log('Failed to refresh packets');
+        });
+}
+
+function refreshStats() {
+    $.get('/api/sniffer/statistics')
+        .done(function(data) {
+            displayStats(data);
+        })
+        .fail(function() {
+            console.log('Failed to refresh statistics');
+        });
+}
+
+function showCaptureActive() {
+    $('#packets-container').html(`
+        <div class="text-center py-5">
+            <i class="fas fa-circle-notch fa-spin fa-3x text-success mb-3"></i>
+            <h4>Capture Active</h4>
+            <p class="text-muted">Listening for network packets...</p>
+        </div>
+    `);
+}
+
+function displayPackets(packets) {
+    if (!packets || packets.length === 0) {
+        if (captureActive) {
+            showCaptureActive();
+        } else {
+            $('#packets-container').html(`
+                <div class="text-center py-5">
+                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                    <h4>No Packets Captured</h4>
+                    <p class="text-muted">No network traffic has been captured yet.</p>
+                </div>
+            `);
+        }
+        return;
+    }
+    
+    let html = '<div class="table-responsive">';
+    html += '<table class="table table-sm table-striped">';
+    html += '<thead><tr><th>Time</th><th>Protocol</th><th>Source</th><th>Destination</th><th>Length</th><th>Info</th></tr></thead>';
+    html += '<tbody>';
+    
+    // Show latest packets first
+    packets.slice(-100).reverse().forEach(function(packet) {
+        const time = new Date(packet.timestamp).toLocaleTimeString();
+        const srcPort = packet.src_port ? `:${packet.src_port}` : '';
+        const dstPort = packet.dst_port ? `:${packet.dst_port}` : '';
+        
+        let info = '';
+        if (packet.service) {
+            info = packet.service;
+        } else if (packet.dns_query) {
+            info = `DNS Query: ${packet.dns_query}`;
+        } else if (packet.tcp_flags) {
+            info = `TCP Flags: ${packet.tcp_flags}`;
+        }
+        
+        html += `
+            <tr>
+                <td><small>${time}</small></td>
+                <td><span class="badge bg-${getProtocolColor(packet.protocol)}">${packet.protocol}</span></td>
+                <td><small>${packet.src}${srcPort}</small></td>
+                <td><small>${packet.dst}${dstPort}</small></td>
+                <td><small>${packet.length}</small></td>
+                <td><small>${info}</small></td>
+            </tr>
+        `;
+    });
+    
+    html += '</tbody></table></div>';
+    $('#packets-container').html(html);
+}
+
+function displayStats(stats) {
+    if (stats.error) {
+        $('#stats-container').html('<p class="text-muted">No statistics available</p>');
+        return;
+    }
+    
+    let html = `
+        <div class="small">
+            <p><strong>Total Packets:</strong> ${stats.total_packets}</p>
+            <p><strong>Stored:</strong> ${stats.stored_packets}</p>
+            <p><strong>Duration:</strong> ${stats.duration_seconds}s</p>
+            <p><strong>Rate:</strong> ${stats.packets_per_second}/s</p>
+        </div>
+    `;
+    
+    if (stats.protocol_distribution) {
+        html += '<hr><h6>Protocols:</h6><div class="small">';
+        Object.entries(stats.protocol_distribution).forEach(([protocol, count]) => {
+            html += `<span class="badge bg-${getProtocolColor(protocol)} me-1">${protocol}: ${count}</span>`;
+        });
+        html += '</div>';
+    }
+    
+    $('#stats-container').html(html);
+}
+
+function getProtocolColor(protocol) {
+    const colors = {
+        'TCP': 'primary',
+        'UDP': 'success', 
+        'ICMP': 'warning',
+        'ARP': 'info',
+        'DNS': 'secondary'
+    };
+    return colors[protocol] || 'dark';
+}
+
+function exportPackets() {
+    const now = new Date();
+    const timestamp = now.toISOString().slice(0, 19).replace(/[T:]/g, '_');
+    $('#export-filename').val(`capture_${timestamp}`);
+    $('#exportModal').modal('show');
+}
+
+function doExport() {
+    const format = $('#export-format').val();
+    const filename = $('#export-filename').val();
+    
+    if (!filename) {
+        alert('Please enter a filename');
+        return;
+    }
+    
+    const exportData = {
+        format: format,
+        filename: filename
+    };
+    
+    $.ajax({
+        url: '/api/sniffer/export',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(exportData),
+        xhrFields: {
+            responseType: 'blob'
+        },
+        success: function(data, status, xhr) {
+            // Create download link
+            const blob = new Blob([data]);
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${filename}.${format}`;
+            a.click();
+            window.URL.revokeObjectURL(url);
+            
+            $('#exportModal').modal('hide');
+        },
+        error: function(xhr) {
+            const error = xhr.responseJSON ? xhr.responseJSON.error : 'Export failed';
+            alert('Export failed: ' + error);
+        }
+    });
+}
+
+function showError(message) {
+    $('#packets-container').html(`
+        <div class="alert alert-danger" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Error:</strong> ${message}
+        </div>
+    `);
+}
+</script>
+{% endblock %}

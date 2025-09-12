@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block title %}Port Scanner - Web Network Scanner{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <h1 class="mb-4">
+                <i class="fas fa-search me-2"></i>
+                Port Scanner
+            </h1>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-cogs me-2"></i>Scan Configuration
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="scan-form">
+                        <div class="mb-3">
+                            <label for="target" class="form-label">Target</label>
+                            <input type="text" class="form-control" id="target" name="target" 
+                                   placeholder="192.168.1.1 or 192.168.1.0/24" required>
+                            <div class="form-text">Single IP or network range (CIDR notation)</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="ports" class="form-label">Ports</label>
+                            <select class="form-select" id="ports-type" onchange="togglePortInput()">
+                                <option value="common">Common Ports</option>
+                                <option value="range">Port Range</option>
+                                <option value="custom">Custom List</option>
+                            </select>
+                            <div id="port-input-container" class="mt-2" style="display: none;">
+                                <input type="text" class="form-control" id="port-input" 
+                                       placeholder="1-1000 or 80,443,22">
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="timeout" class="form-label">Timeout (seconds)</label>
+                            <input type="number" class="form-control" id="timeout" name="timeout" 
+                                   value="1" min="0.1" max="10" step="0.1">
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="threads" class="form-label">Max Threads</label>
+                            <input type="number" class="form-control" id="threads" name="threads" 
+                                   value="100" min="1" max="500">
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100" id="scan-btn">
+                            <i class="fas fa-search me-1"></i>Start Scan
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list me-2"></i>Scan Results
+                    </h5>
+                    <div id="scan-status" class="badge bg-secondary">Ready</div>
+                </div>
+                <div class="card-body">
+                    <div id="results-container">
+                        <div class="text-center py-5">
+                            <i class="fas fa-search fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">Configure scan parameters and click "Start Scan" to begin</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentScanId = null;
+
+$(document).ready(function() {
+    $('#scan-form').on('submit', function(e) {
+        e.preventDefault();
+        startScan();
+    });
+});
+
+function togglePortInput() {
+    const portsType = $('#ports-type').val();
+    const container = $('#port-input-container');
+    const input = $('#port-input');
+    
+    if (portsType === 'common') {
+        container.hide();
+    } else {
+        container.show();
+        if (portsType === 'range') {
+            input.attr('placeholder', '1-1000');
+            input.val('1-1000');
+        } else if (portsType === 'custom') {
+            input.attr('placeholder', '80,443,22,21');
+            input.val('');
+        }
+    }
+}
+
+function startScan() {
+    const target = $('#target').val();
+    const portsType = $('#ports-type').val();
+    const timeout = parseFloat($('#timeout').val());
+    const threads = parseInt($('#threads').val());
+    
+    let ports = 'common';
+    if (portsType === 'range' || portsType === 'custom') {
+        ports = $('#port-input').val();
+        if (portsType === 'custom') {
+            ports = ports.split(',').map(p => parseInt(p.trim())).filter(p => !isNaN(p));
+        }
+    }
+    
+    const scanData = {
+        target: target,
+        ports: ports,
+        timeout: timeout,
+        threads: threads
+    };
+    
+    $('#scan-btn').prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-1"></i>Scanning...');
+    $('#scan-status').removeClass('bg-secondary bg-success bg-danger').addClass('bg-warning').text('Scanning...');
+    
+    showLoadingResults();
+    
+    $.ajax({
+        url: '/api/scan/port',
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(scanData),
+        success: function(response) {
+            currentScanId = response.scan_id;
+            displayResults(response.results);
+            $('#scan-status').removeClass('bg-warning').addClass('bg-success').text('Completed');
+        },
+        error: function(xhr) {
+            const error = xhr.responseJSON ? xhr.responseJSON.error : 'Unknown error occurred';
+            showError('Scan failed: ' + error);
+            $('#scan-status').removeClass('bg-warning').addClass('bg-danger').text('Failed');
+        },
+        complete: function() {
+            $('#scan-btn').prop('disabled', false).html('<i class="fas fa-search me-1"></i>Start Scan');
+        }
+    });
+}
+
+function showLoadingResults() {
+    $('#results-container').html(`
+        <div class="text-center py-5">
+            <i class="fas fa-spinner fa-spin fa-3x text-primary mb-3"></i>
+            <h4>Scanning in progress...</h4>
+            <p class="text-muted">This may take a few moments depending on the target and port range.</p>
+        </div>
+    `);
+}
+
+function displayResults(results) {
+    if (!results || results.length === 0) {
+        $('#results-container').html(`
+            <div class="text-center py-5">
+                <i class="fas fa-exclamation-circle fa-3x text-warning mb-3"></i>
+                <h4>No Results</h4>
+                <p class="text-muted">No open ports found or no hosts responded.</p>
+            </div>
+        `);
+        return;
+    }
+    
+    let html = '';
+    
+    results.forEach(function(hostResult, index) {
+        if (hostResult.error) {
+            html += `
+                <div class="alert alert-danger" role="alert">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Error:</strong> ${hostResult.error}
+                </div>
+            `;
+            return;
+        }
+        
+        const openPorts = hostResult.open_ports || [];
+        const closedPorts = hostResult.closed_ports || [];
+        
+        html += `
+            <div class="card mb-3">
+                <div class="card-header">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="mb-0">
+                                <i class="fas fa-server me-2"></i>
+                                Host: ${hostResult.host}
+                            </h6>
+                        </div>
+                        <div class="col-md-6 text-end">
+                            <span class="badge bg-success">${openPorts.length} Open</span>
+                            <span class="badge bg-secondary">${closedPorts.length} Closed</span>
+                            <span class="badge bg-info">${hostResult.scan_time}s</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+        `;
+        
+        if (openPorts.length > 0) {
+            html += '<h6 class="text-success">Open Ports:</h6>';
+            html += '<div class="table-responsive">';
+            html += '<table class="table table-sm table-striped">';
+            html += '<thead><tr><th>Port</th><th>Service</th><th>State</th></tr></thead>';
+            html += '<tbody>';
+            
+            openPorts.forEach(function(port) {
+                html += `
+                    <tr>
+                        <td><strong>${port.port}</strong></td>
+                        <td>${port.service}</td>
+                        <td><span class="badge bg-success">${port.state}</span></td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table></div>';
+        }
+        
+        if (openPorts.length === 0) {
+            html += '<p class="text-muted">No open ports detected on this host.</p>';
+        }
+        
+        html += '</div></div>';
+    });
+    
+    $('#results-container').html(html);
+}
+
+function showError(message) {
+    $('#results-container').html(`
+        <div class="alert alert-danger" role="alert">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <strong>Error:</strong> ${message}
+        </div>
+    `);
+}
+</script>
+{% endblock %}
