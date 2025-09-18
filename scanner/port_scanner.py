@@ -144,7 +144,7 @@ class PortScanner:
         Returns:
             True if host responds, False otherwise
         """
-        common_ports = [80, 443, 22, 21, 25, 53, 110, 995, 993, 143]
+        common_ports = [80, 443, 22, 21, 25, 53, 110, 995, 993, 143, 5000]
         
         for port in common_ports:
             try:
@@ -165,7 +165,7 @@ class PortScanner:
         """
         return [
             21, 22, 23, 25, 53, 80, 110, 111, 135, 139,
-            143, 443, 993, 995, 1723, 3306, 3389, 5432, 5900, 8080
+            143, 443, 993, 995, 1723, 3306, 3389, 5432, 5000, 8080, 5000
         ]
     
     def get_port_range(self, start: int, end: int) -> List[int]:

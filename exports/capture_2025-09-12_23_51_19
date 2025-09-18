@@ -1,0 +1,12 @@
+{
+  "statistics": {
+    "total_packets": 0,
+    "stored_packets": 0,
+    "duration_seconds": 54.04,
+    "packets_per_second": 0.0,
+    "protocol_distribution": {},
+    "service_distribution": {},
+    "is_active": false
+  },
+  "packets": []
+}
