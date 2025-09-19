@@ -13,12 +13,30 @@ from scanner.packet_sniffer import PacketSniffer
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-change-this'
+app.config['DEBUG'] = True  # Enable debug mode
+app.config['TEMPLATES_AUTO_RELOAD'] = True  # Auto reload templates
+
+# Configure logging
+import logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('logs/app.log'),
+        logging.StreamHandler()
+    ]
+)
 
 # Global instances
-port_scanner = PortScanner()
-packet_sniffer = PacketSniffer()  # Initialize with default interface
-scan_results = {}
-scan_history = []
+try:
+    port_scanner = PortScanner()
+    packet_sniffer = PacketSniffer()  # Initialize with default interface
+    scan_results = {}
+    scan_history = []
+    app.logger.info("Successfully initialized scanner instances")
+except Exception as e:
+    app.logger.error(f"Error initializing scanner instances: {str(e)}")
+    raise
 
 # Store packet capture status
 packet_capture_status = {

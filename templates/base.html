@@ -50,14 +50,19 @@
                 {% block header_title %}Web Network Scanner{% endblock %}
             </div>
             <div class="header-actions">
-                <button class="btn btn-icon" title="Settings">
+                <button class="btn btn-icon" data-bs-toggle="tooltip" title="Settings">
                     <i class="fas fa-cog"></i>
                 </button>
-                <button class="btn btn-icon" title="Help">
+                <button class="btn btn-icon" data-bs-toggle="tooltip" title="Help">
                     <i class="fas fa-question-circle"></i>
                 </button>
             </div>
         </header>
+
+        <!-- Content Area -->
+        <div class="content-area">
+            {% block content %}{% endblock %}
+        </div>
 
     <main class="container-fluid py-4">
         {% block content %}{% endblock %}
