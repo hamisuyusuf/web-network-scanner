@@ -1,14 +1,15 @@
 # Web Network Scanner
 
-A comprehensive web-based network scanning tool that provides port scanning and packet sniffing capabilities through an intuitive web interface.
+A comprehensive web-based network scanning tool that provides port scanning and packet sniffing capabilities through an intuitive web interface. Built with Python, Flask, and Scapy, this tool offers a powerful combination of network analysis features with a user-friendly web interface.
 
 ## ⚠️ **IMPORTANT SECURITY NOTICE** ⚠️
 
-**This tool is intended for educational purposes and authorized penetration testing only.** 
+**This tool is intended for educational purposes and authorized network analysis only.** 
 
 - Only use this tool on networks you own or have explicit written permission to test
 - Unauthorized scanning of networks and systems may be illegal and unethical
 - Always comply with local laws and regulations
+- Root/Administrator privileges are required for packet sniffing functionality
 - The authors are not responsible for any misuse of this tool
 
 ## 🚀 Features
@@ -98,6 +99,277 @@ options:
 - Quick access to tools
 
 ### Port Scanner
+- Scan single hosts or CIDR ranges
+- Select specific ports or use predefined ranges
+- Adjust timeout and thread settings
+- View real-time scan results
+- Export scan results to JSON/CSV
+
+### Packet Sniffer
+- Capture network traffic on any interface
+- Apply BPF filters to capture specific traffic
+- Real-time protocol and service statistics
+- Export packet captures to JSON/CSV
+- Monitor HTTP, HTTPS, DNS, and other common protocols
+
+## 🚛 API Reference
+
+### Port Scanner Endpoints
+
+#### Scan Ports
+```http
+POST /api/scan/port
+Content-Type: application/json
+
+{
+    "target": "192.168.1.1",        # Single IP or CIDR range (192.168.1.0/24)
+    "ports": [80, 443, 22],         # Specific ports list
+    "ports": "common",              # Or use common ports
+    "ports": "1-1000",             # Or port range
+    "timeout": 1.0,                # Seconds per port
+    "threads": 100                 # Max concurrent threads
+}
+
+Response 200 OK:
+{
+    "scan_id": "20250919_123456",
+    "target": "192.168.1.1",
+    "results": [
+        {
+            "host": "192.168.1.1",
+            "open_ports": [
+                {"port": 80, "service": "HTTP"},
+                {"port": 443, "service": "HTTPS"}
+            ],
+            "scan_time": "1.5s"
+        }
+    ]
+}
+```
+
+### Packet Sniffer Endpoints
+
+#### Start Capture
+```http
+POST /api/capture/start
+Content-Type: application/json
+
+{
+    "interface": "eth0",           # Network interface (optional)
+    "filter": "tcp port 80",       # BPF filter string (optional)
+    "timeout": 0,                  # Capture timeout in seconds (0 = unlimited)
+    "packet_count": 0             # Max packets to capture (0 = unlimited)
+}
+
+Response 200 OK:
+{
+    "status": "success",
+    "message": "Packet capture started",
+    "interface": "eth0",
+    "filter": "tcp port 80"
+}
+```
+
+#### Stop Capture
+```http
+POST /api/capture/stop
+
+Response 200 OK:
+{
+    "status": "success",
+    "message": "Packet capture stopped",
+    "statistics": {
+        "total_packets": 2225,
+        "stored_packets": 1000,
+        "duration_seconds": 346.11,
+        "packets_per_second": 6.43,
+        "protocol_distribution": {
+            "TCP": 1000
+        },
+        "service_distribution": {
+            "HTTP": 42,
+            "HTTPS": 958
+        }
+    },
+    "capture_id": "capture_2025-09-19_15_22_35"
+}
+```
+
+#### Get Capture Status
+```http
+GET /api/capture/status
+
+Response 200 OK:
+{
+    "status": "success",
+    "is_active": true,
+    "start_time": "2025-09-19T15:22:35.140332",
+    "interface": "eth0",
+    "statistics": {
+        "total_packets": 1500,
+        "stored_packets": 1000,
+        "duration_seconds": 180.5,
+        "packets_per_second": 8.31,
+        "protocol_distribution": {
+            "TCP": 800,
+            "UDP": 150,
+            "ICMP": 50
+        },
+        "service_distribution": {
+            "HTTP": 300,
+            "HTTPS": 500,
+            "DNS": 150,
+            "SSH": 50
+        }
+    }
+}
+```
+
+#### List Available Network Interfaces
+```http
+GET /api/capture/interfaces
+
+Response 200 OK:
+{
+    "status": "success",
+    "interfaces": [
+        "eth0",
+        "lo",
+        "wlan0"
+    ]
+}
+```
+
+### Error Responses
+All endpoints may return the following error responses:
+
+```http
+Response 400 Bad Request:
+{
+    "status": "error",
+    "message": "Invalid request parameters"
+}
+
+Response 401 Unauthorized:
+{
+    "status": "error",
+    "message": "Authentication required"
+}
+
+Response 403 Forbidden:
+{
+    "status": "error",
+    "message": "Insufficient permissions"
+}
+
+Response 500 Internal Server Error:
+{
+    "status": "error",
+    "message": "Internal server error occurred"
+}
+```
+
+### API Usage Examples
+
+#### Start TCP Port Scan
+```bash
+curl -X POST http://localhost:5000/api/scan/port \
+  -H "Content-Type: application/json" \
+  -d '{
+    "target": "192.168.1.1",
+    "ports": [22, 80, 443],
+    "timeout": 1.0,
+    "threads": 50
+  }'
+```
+
+#### Start Packet Capture
+```bash
+curl -X POST http://localhost:5000/api/capture/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "interface": "eth0",
+    "filter": "tcp port 80 or port 443",
+    "timeout": 300
+  }'
+```
+
+#### Monitor Capture Status
+```bash
+curl http://localhost:5000/api/capture/status | jq
+```
+
+## 📊 Example Output
+
+### Port Scan Results
+```json
+{
+    "scan_id": "20250919_123456",
+    "target": "192.168.1.1",
+    "open_ports": [
+        {"port": 80, "service": "HTTP"},
+        {"port": 443, "service": "HTTPS"},
+        {"port": 22, "service": "SSH"}
+    ],
+    "scan_time": "2.5s"
+}
+```
+
+### Packet Capture Statistics
+```json
+{
+    "total_packets": 2225,
+    "stored_packets": 1000,
+    "duration_seconds": 346.11,
+    "packets_per_second": 6.43,
+    "protocol_distribution": {
+        "TCP": 1000
+    },
+    "service_distribution": {
+        "HTTP": 42,
+        "HTTPS": 958
+    }
+}
+```
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+1. **Permission Denied**
+   ```bash
+   sudo python app.py --host 0.0.0.0 --port 5000
+   ```
+   Root privileges are required for packet sniffing.
+
+2. **No Packets Captured**
+   - Verify interface exists and is up
+   - Check BPF filter syntax
+   - Ensure sufficient permissions
+   - Generate some network traffic
+
+3. **Port Scan Timeouts**
+   - Adjust timeout settings
+   - Check firewall rules
+   - Reduce thread count
+
+## 📜 License
+
+MIT License - See LICENSE file for details.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## 📞 Support
+
+- Open an issue for bug reports
+- Submit feature requests through issues
+- Check documentation for common questions
 1. **Target Configuration**:
    - Single IP: `192.168.1.1`
    - IP range: `192.168.1.0/24`
@@ -140,21 +412,25 @@ Content-Type: application/json
 ```
 
 ### Packet Sniffing
-```http
+
+# Capture
+curl http://localhost:5000/api/capture/interfaces
+
 # Start capture
-POST /api/sniffer/start
-{
-  "interface": null,
-  "filter": "tcp port 80",
-  "max_packets": 1000,
-  "timeout": 60
-}
+
+curl -X POST http://localhost:5000/api/capture/start \
+  -H "Content-Type: application/json" \
+  -d '{"interface": "eth0", "filter": "tcp"}'
+
+
+# Check Status
+curl http://localhost:5000/api/capture/status
 
 # Stop capture
-POST /api/sniffer/stop
+curl -X POST http://localhost:5000/api/capture/stop
 
 # Get packets
-GET /api/sniffer/packets
+
 
 # Get statistics
 GET /api/sniffer/statistics
