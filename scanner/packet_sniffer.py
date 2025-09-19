@@ -9,15 +9,27 @@ from datetime import datetime
 from typing import List, Dict, Optional, Callable
 import json
 import os
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    filename='logs/app_20250919.log'
+)
+logger = logging.getLogger(__name__)
 
 try:
-    from scapy.all import sniff, get_if_list, conf
+    from scapy.all import sniff, get_if_list, conf, Ether
     from scapy.layers.inet import IP, TCP, UDP, ICMP
-    from scapy.layers.l2 import Ether, ARP
+    from scapy.layers.l2 import ARP
     from scapy.layers.dns import DNS, DNSQR, DNSRR
     SCAPY_AVAILABLE = True
-except ImportError:
+    logger.info("Scapy successfully imported")
+except ImportError as e:
     SCAPY_AVAILABLE = False
+    logger.error(f"Failed to import Scapy: {e}")
+    raise ImportError("Scapy is required for packet sniffing functionality. Please install it using 'pip install scapy'")
 
 
 class PacketSniffer:
@@ -55,13 +67,22 @@ class PacketSniffer:
             True if started successfully, False otherwise
         """
         if self.is_sniffing:
+            logger.warning("Packet capture already in progress")
             return False
-        
+            
+        # Verify interface exists if specified
+        if self.interface and self.interface not in self.get_available_interfaces():
+            logger.error(f"Interface {self.interface} not found")
+            return False
+            
         try:
             self.is_sniffing = True
             self.start_time = datetime.now()
             self.captured_packets.clear()
             self.packet_count = 0
+            
+            logger.info(f"Starting packet capture on interface: {self.interface or 'default'}")
+            logger.info(f"Filter: {filter_string or 'none'}, Count: {packet_count or 'unlimited'}, Timeout: {timeout or 'none'}")
             
             def packet_handler(packet):
                 if not self.is_sniffing:
@@ -104,18 +125,32 @@ class PacketSniffer:
                      timeout: int, packet_handler: Callable):
         """Worker function for packet sniffing"""
         try:
+            # Check for root privileges
+            if os.geteuid() != 0:
+                logger.error("Root privileges required for packet sniffing")
+                raise PermissionError("Root privileges required for packet sniffing")
+                
+            logger.debug("Starting sniff worker thread")
             sniff(
                 iface=self.interface,
                 filter=filter_string,
                 prn=packet_handler,
                 count=packet_count if packet_count > 0 else 0,
                 timeout=timeout if timeout > 0 else None,
-                stop_filter=lambda x: not self.is_sniffing
+                stop_filter=lambda x: not self.is_sniffing,
+                store=0  # Don't store packets in memory
             )
+            logger.info("Sniffing completed normally")
+            
         except Exception as e:
-            print(f"Sniffing error: {e}")
+            logger.error(f"Sniffing error: {str(e)}")
+            if "permission" in str(e).lower():
+                logger.error("Permission denied. Try running with sudo")
+            elif "no such device" in str(e).lower():
+                logger.error(f"Interface {self.interface} not found or not accessible")
         finally:
             self.is_sniffing = False
+            logger.info("Sniffing stopped")
     
     def _analyze_packet(self, packet) -> Optional[Dict]:
         """

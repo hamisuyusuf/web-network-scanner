@@ -16,9 +16,16 @@ app.config['SECRET_KEY'] = 'your-secret-key-change-this'
 
 # Global instances
 port_scanner = PortScanner()
-packet_sniffer = None
+packet_sniffer = PacketSniffer()  # Initialize with default interface
 scan_results = {}
 scan_history = []
+
+# Store packet capture status
+packet_capture_status = {
+    'is_active': False,
+    'start_time': None,
+    'interface': None
+}
 
 
 @app.route('/')
@@ -37,6 +44,158 @@ def port_scanner_page():
 def packet_sniffer_page():
     """Packet sniffer interface"""
     return render_template('packet_sniffer.html')
+
+
+@app.route('/api/capture/start', methods=['POST'])
+def start_capture():
+    """
+    Start packet capture
+    Expected JSON: {
+        "interface": "eth0",  # optional
+        "filter": "tcp port 80",  # optional
+        "timeout": 0,  # optional, 0 for no timeout
+        "packet_count": 0  # optional, 0 for unlimited
+    }
+    """
+    global packet_sniffer, packet_capture_status
+    
+    try:
+        data = request.get_json() or {}
+        
+        # Get parameters with defaults
+        interface = data.get('interface')
+        filter_string = data.get('filter', '')
+        timeout = int(data.get('timeout', 0))
+        packet_count = int(data.get('packet_count', 0))
+        
+        # Initialize new sniffer if interface changes
+        if interface != packet_capture_status['interface']:
+            packet_sniffer = PacketSniffer(interface=interface)
+            packet_capture_status['interface'] = interface
+        
+        # Start capture
+        if packet_sniffer.start_sniffing(
+            filter_string=filter_string,
+            packet_count=packet_count,
+            timeout=timeout
+        ):
+            packet_capture_status['is_active'] = True
+            packet_capture_status['start_time'] = datetime.now().isoformat()
+            
+            return jsonify({
+                'status': 'success',
+                'message': 'Packet capture started',
+                'interface': interface or 'default',
+                'filter': filter_string or 'none'
+            })
+        else:
+            return jsonify({
+                'status': 'error',
+                'message': 'Failed to start packet capture'
+            }), 400
+            
+    except Exception as e:
+        app.logger.error(f"Error starting packet capture: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/capture/stop', methods=['POST'])
+def stop_capture():
+    """Stop packet capture"""
+    global packet_sniffer, packet_capture_status
+    
+    try:
+        if packet_sniffer:
+            packet_sniffer.stop_sniffing()
+            
+            # Get capture results
+            stats = packet_sniffer.get_statistics()
+            packets = packet_sniffer.get_captured_packets()
+            
+            # Generate capture ID and store results
+            capture_id = datetime.now().strftime('capture_%Y-%m-%d_%H_%M_%S')
+            
+            # Export results
+            os.makedirs('exports', exist_ok=True)
+            export_file = f'exports/{capture_id}'
+            packet_sniffer.export_packets(export_file, format='json')
+            
+            packet_capture_status['is_active'] = False
+            
+            return jsonify({
+                'status': 'success',
+                'message': 'Packet capture stopped',
+                'statistics': stats,
+                'capture_id': capture_id
+            })
+        
+        return jsonify({
+            'status': 'error',
+            'message': 'No active packet capture'
+        }), 400
+        
+    except Exception as e:
+        app.logger.error(f"Error stopping packet capture: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/capture/status', methods=['GET'])
+def capture_status():
+    """Get packet capture status and statistics"""
+    global packet_sniffer, packet_capture_status
+    
+    try:
+        if packet_sniffer:
+            stats = packet_sniffer.get_statistics()
+            return jsonify({
+                'status': 'success',
+                'is_active': packet_capture_status['is_active'],
+                'start_time': packet_capture_status['start_time'],
+                'interface': packet_capture_status['interface'] or 'default',
+                'statistics': stats
+            })
+        
+        return jsonify({
+            'status': 'error',
+            'message': 'Packet sniffer not initialized'
+        }), 400
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+
+@app.route('/api/capture/interfaces', methods=['GET'])
+def get_interfaces():
+    """Get list of available network interfaces"""
+    global packet_sniffer
+    
+    try:
+        if packet_sniffer:
+            interfaces = packet_sniffer.get_available_interfaces()
+            return jsonify({
+                'status': 'success',
+                'interfaces': interfaces
+            })
+        
+        return jsonify({
+            'status': 'error',
+            'message': 'Packet sniffer not initialized'
+        }), 400
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 
 @app.route('/api/scan/port', methods=['POST'])
