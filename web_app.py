@@ -3,21 +3,26 @@ Web Network Scanner - Flask Application
 Main web application providing REST API endpoints for port scanning and packet sniffing
 """
 
-from flask import Flask, render_template, request, jsonify, send_file
 import threading
 import json
 import os
+import sys
+import traceback
+import logging
 from datetime import datetime
+from flask import Flask, render_template, request, jsonify, send_file, current_app
 from scanner.port_scanner import PortScanner
 from scanner.packet_sniffer import PacketSniffer
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key-change-this'
-app.config['DEBUG'] = True  # Enable debug mode
-app.config['TEMPLATES_AUTO_RELOAD'] = True  # Auto reload templates
+app.config['DEBUG'] = True
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 # Configure logging
-import logging
+if not os.path.exists('logs'):
+    os.makedirs('logs')
+
 logging.basicConfig(
     level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -27,15 +32,36 @@ logging.basicConfig(
     ]
 )
 
+# Error handler for all exceptions
+@app.errorhandler(Exception)
+def handle_error(e):
+    # Get current exception info
+    exc_type, exc_value, exc_traceback = sys.exc_info()
+    
+    # Format the traceback
+    traceback_details = ''.join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+    
+    # Log the error
+    current_app.logger.error(f"Exception occurred: {str(e)}\nTraceback:\n{traceback_details}")
+    
+    # Return error response
+    response = {
+        "error": str(e),
+        "type": exc_type.__name__,
+        "traceback": traceback_details if app.debug else "Enable debug mode for details"
+    }
+    return jsonify(response), 500
+
 # Global instances
 try:
     port_scanner = PortScanner()
-    packet_sniffer = PacketSniffer()  # Initialize with default interface
+    packet_sniffer = PacketSniffer()
     scan_results = {}
     scan_history = []
     app.logger.info("Successfully initialized scanner instances")
 except Exception as e:
     app.logger.error(f"Error initializing scanner instances: {str(e)}")
+    traceback.print_exc()
     raise
 
 # Store packet capture status
