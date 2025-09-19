@@ -12,6 +12,9 @@ $(document).ready(function() {
     
     // Initialize global error handler
     setupGlobalErrorHandler();
+    
+    // Initialize responsive sidebar
+    initializeSidebar();
 });
 
 /**
@@ -55,6 +58,68 @@ function setupGlobalErrorHandler() {
         // Show user-friendly error message for network errors
         if (xhr.status === 0) {
             showNotification('Connection Error', 'Unable to connect to the server. Please check your connection.', 'error');
+        }
+    });
+}
+
+/**
+ * Initialize responsive sidebar behavior
+ */
+function initializeSidebar() {
+    const sidebarToggle = document.getElementById('sidebar-toggle');
+    const sidebar = document.querySelector('.sidebar');
+    const mainContent = document.querySelector('.main-content');
+    let isSidebarOpen = false;
+
+    // Toggle sidebar on button click
+    sidebarToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('active');
+        isSidebarOpen = !isSidebarOpen;
+    });
+
+    // Handle mobile touch events
+    let touchStartX = 0;
+    let touchEndX = 0;
+
+    document.addEventListener('touchstart', (e) => {
+        touchStartX = e.changedTouches[0].screenX;
+    }, false);
+
+    document.addEventListener('touchend', (e) => {
+        touchEndX = e.changedTouches[0].screenX;
+        handleSwipe();
+    }, false);
+
+    function handleSwipe() {
+        const swipeDistance = touchEndX - touchStartX;
+        const isMobile = window.innerWidth <= 768;
+        
+        if (isMobile) {
+            if (swipeDistance > 50 && !isSidebarOpen) { // Right swipe
+                sidebar.classList.add('active');
+                isSidebarOpen = true;
+            } else if (swipeDistance < -50 && isSidebarOpen) { // Left swipe
+                sidebar.classList.remove('active');
+                isSidebarOpen = false;
+            }
+        }
+    }
+
+    // Close sidebar when clicking outside on mobile
+    document.addEventListener('click', (e) => {
+        const isMobile = window.innerWidth <= 768;
+        if (isMobile && isSidebarOpen && !sidebar.contains(e.target) && !sidebarToggle.contains(e.target)) {
+            sidebar.classList.remove('active');
+            isSidebarOpen = false;
+        }
+    });
+
+    // Handle window resize
+    window.addEventListener('resize', () => {
+        const isMobile = window.innerWidth <= 768;
+        if (!isMobile) {
+            sidebar.classList.remove('active');
+            isSidebarOpen = false;
         }
     });
 }
