@@ -1,53 +1,106 @@
 {% extends "base.html" %}
 
 {% block title %}Dashboard - Web Network Scanner{% endblock %}
+{% block header_title %}Network Scanner Dashboard{% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="row">
-        <div class="col-md-12">
-            <h1 class="mb-4">
-                <i class="fas fa-network-wired me-2"></i>
-                Network Scanner Dashboard
-            </h1>
+<div class="dashboard fade-in">
+    <!-- Quick Stats -->
+    <div class="row g-4 mb-4">
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-icon bg-primary">
+                        <i class="fas fa-wifi"></i>
+                    </div>
+                    <h3 class="stat-value">5</h3>
+                    <p class="stat-label">Active Hosts</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-icon bg-success">
+                        <i class="fas fa-door-open"></i>
+                    </div>
+                    <h3 class="stat-value">12</h3>
+                    <p class="stat-label">Open Ports</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-icon bg-info">
+                        <i class="fas fa-exchange-alt"></i>
+                    </div>
+                    <h3 class="stat-value">2.5K</h3>
+                    <p class="stat-label">Packets Captured</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card stat-card">
+                <div class="card-body">
+                    <div class="stat-icon bg-warning">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <h3 class="stat-value">3</h3>
+                    <p class="stat-label">Security Alerts</p>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="row mb-4">
+    <!-- Main Tools -->
+    <div class="row g-4 mb-4">
         <div class="col-md-6">
-            <div class="card bg-primary text-white">
+            <div class="card tool-card">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <h4 class="card-title">Port Scanner</h4>
-                            <p class="card-text">Scan ports on target hosts to discover open services</p>
-                            <a href="{{ url_for('port_scanner_page') }}" class="btn btn-light">
-                                <i class="fas fa-search me-1"></i>Start Scanning
-                            </a>
-                        </div>
-                        <div class="align-self-center">
-                            <i class="fas fa-search fa-3x opacity-50"></i>
-                        </div>
+                    <div class="tool-icon bg-primary">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <h4 class="tool-title">Port Scanner</h4>
+                    <p class="tool-description">
+                        Scan network hosts to discover open ports and running services. 
+                        Supports single hosts and CIDR ranges.
+                    </p>
+                    <div class="tool-actions">
+                        <a href="{{ url_for('port_scanner_page') }}" class="btn btn-primary btn-action">
+                            <i class="fas fa-play me-2"></i>Start Scanning
+                        </a>
+                        <button class="btn btn-icon btn-refresh" title="View History">
+                            <i class="fas fa-history"></i>
+                        </button>
                     </div>
                 </div>
             </div>
         </div>
         
         <div class="col-md-6">
-            <div class="card bg-success text-white">
+            <div class="card tool-card">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between">
-                        <div>
-                            <h4 class="card-title">Packet Sniffer</h4>
-                            <p class="card-text">Capture and analyze network traffic in real-time</p>
-                            <a href="{{ url_for('packet_sniffer_page') }}" class="btn btn-light">
-                                <i class="fas fa-eye me-1"></i>Start Sniffing
-                            </a>
-                        </div>
-                        <div class="align-self-center">
-                            <i class="fas fa-eye fa-3x opacity-50"></i>
-                        </div>
+                    <div class="tool-icon bg-success">
+                        <i class="fas fa-eye"></i>
                     </div>
+                    <h4 class="tool-title">Packet Sniffer</h4>
+                    <p class="tool-description">
+                        Capture and analyze network traffic in real-time. 
+                        Monitor protocols, services, and data flow.
+                    </p>
+                    <div class="tool-actions">
+                        <a href="{{ url_for('packet_sniffer_page') }}" class="btn btn-success btn-action">
+                            <i class="fas fa-play me-2"></i>Start Sniffing
+                        </a>
+                        <button class="btn btn-icon btn-refresh" title="View Captures">
+                            <i class="fas fa-history"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
                 </div>
             </div>
         </div>
