@@ -101,12 +101,12 @@ def print_banner():
     """Print application banner"""
     banner = """
     ╔══════════════════════════════════════════════════════════════╗
-    ║                    Web Network Scanner                        ║
+    ║                    Web Network Scanner                       ║
     ║                                                              ║
-    ║  A comprehensive web-based network scanning tool            ║
-    ║  Features: Port Scanner, Packet Sniffer, Web Interface      ║
+    ║  A comprehensive web-based network scanning tool             ║
+    ║  Features: Port Scanner, Packet Sniffer, Web Interface       ║
     ║                                                              ║
-    ║  ⚠️  FOR EDUCATIONAL AND AUTHORIZED TESTING ONLY ⚠️           ║
+    ║                                                              ║
     ╚══════════════════════════════════════════════════════════════╝
     """
     print(banner)
@@ -199,7 +199,6 @@ Examples:
         print("   • Port Scanner: /port-scanner")
         print("   • Packet Sniffer: /packet-sniffer")
         print("   • API Documentation: Use browser developer tools to explore /api/* endpoints")
-        print("\n⚠️  Remember: Only use this tool on networks you own or have explicit permission to test!")
         print("\n🔧 Press Ctrl+C to stop the server\n")
         
         # Start the Flask development server
