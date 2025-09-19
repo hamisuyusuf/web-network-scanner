@@ -33,13 +33,13 @@ except ImportError as e:
 
 
 class PacketSniffer:
-    def __init__(self, interface: Optional[str] = None, max_packets: int = 1000):
+    def __init__(self, interface: Optional[str] = None, max_packets: int = 5000):
         """
         Initialize the packet sniffer
         
         Args:
             interface: Network interface to sniff on (None for default)
-            max_packets: Maximum number of packets to store in memory
+            max_packets: Maximum number of packets to store in memory (default 5000)
         """
         self.interface = interface
         self.max_packets = max_packets
@@ -88,17 +88,27 @@ class PacketSniffer:
                 if not self.is_sniffing:
                     return
                 
-                packet_info = self._analyze_packet(packet)
-                if packet_info:
-                    self.captured_packets.append(packet_info)
-                    self.packet_count += 1
+                try:
+                    # Log raw packet summary for debugging
+                    logger.debug(f"Received packet: {packet.summary()}")
                     
-                    # Limit memory usage
-                    if len(self.captured_packets) > self.max_packets:
-                        self.captured_packets.pop(0)
-                    
-                    if callback:
-                        callback(packet_info)
+                    packet_info = self._analyze_packet(packet)
+                    if packet_info:
+                        logger.debug(f"Analyzed packet: {packet_info}")
+                        self.captured_packets.append(packet_info)
+                        self.packet_count += 1
+                        
+                        # Limit memory usage
+                        if len(self.captured_packets) > self.max_packets:
+                            self.captured_packets.pop(0)
+                        
+                        if callback:
+                            callback(packet_info)
+                    else:
+                        logger.debug("Packet analysis returned None")
+                except Exception as e:
+                    logger.error(f"Error in packet handler: {str(e)}")
+                    # Continue processing other packets even if one fails
             
             # Start sniffing in a separate thread
             self.sniff_thread = threading.Thread(
@@ -129,8 +139,20 @@ class PacketSniffer:
             if os.geteuid() != 0:
                 logger.error("Root privileges required for packet sniffing")
                 raise PermissionError("Root privileges required for packet sniffing")
+            
+            # Set interface in promiscuous mode
+            if self.interface:
+                try:
+                    os.system(f"ip link set {self.interface} promisc on")
+                    logger.info(f"Set {self.interface} to promiscuous mode")
+                except Exception as e:
+                    logger.warning(f"Failed to set promiscuous mode: {e}")
                 
             logger.debug("Starting sniff worker thread")
+            logger.info(f"Sniffing on interface: {self.interface or 'default'}")
+            logger.info(f"Filter string: {filter_string or 'none'}")
+            
+            # Use monitor=True to capture more packets
             sniff(
                 iface=self.interface,
                 filter=filter_string,
@@ -138,7 +160,8 @@ class PacketSniffer:
                 count=packet_count if packet_count > 0 else 0,
                 timeout=timeout if timeout > 0 else None,
                 stop_filter=lambda x: not self.is_sniffing,
-                store=0  # Don't store packets in memory
+                store=0,  # Don't store packets in memory
+                monitor=True  # Enable monitor mode if possible
             )
             logger.info("Sniffing completed normally")
             
