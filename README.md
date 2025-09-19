@@ -2,15 +2,6 @@
 
 A comprehensive web-based network scanning tool that provides port scanning and packet sniffing capabilities through an intuitive web interface. Built with Python, Flask, and Scapy, this tool offers a powerful combination of network analysis features with a user-friendly web interface.
 
-## ⚠️ **IMPORTANT SECURITY NOTICE** ⚠️
-
-**This tool is intended for educational purposes and authorized network analysis only.** 
-
-- Only use this tool on networks you own or have explicit written permission to test
-- Unauthorized scanning of networks and systems may be illegal and unethical
-- Always comply with local laws and regulations
-- Root/Administrator privileges are required for packet sniffing functionality
-- The authors are not responsible for any misuse of this tool
 
 ## 🚀 Features
 
@@ -117,18 +108,18 @@ options:
 ### Port Scanner Endpoints
 
 #### Scan Ports
-```http
-POST /api/scan/port
-Content-Type: application/json
 
-{
-    "target": "192.168.1.1",        # Single IP or CIDR range (192.168.1.0/24)
-    "ports": [80, 443, 22],         # Specific ports list
-    "ports": "common",              # Or use common ports
-    "ports": "1-1000",             # Or port range
-    "timeout": 1.0,                # Seconds per port
-    "threads": 100                 # Max concurrent threads
-}
+curl -X POST http://localhost:5000/api/scan/port
+   -H "Content-Type: application/json"
+
+   -d '{
+      "target": "192.168.1.1",        # Single IP or CIDR range (192.168.1.0/24)
+      "ports": [80, 443, 22],         # Specific ports list
+      "ports": "common",              # Or use common ports
+      "ports": "1-1000",             # Or port range
+      "timeout": 1.0,                # Seconds per port
+      "threads": 100                 # Max concurrent threads
+   }'
 
 Response 200 OK:
 {
@@ -610,5 +601,3 @@ Contributions are welcome! Please:
 - Cross-platform support
 
 ---
-
-**Remember**: Always use this tool responsibly and only on networks you own or have explicit permission to test. Stay legal, stay ethical!
