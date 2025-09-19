@@ -7,6 +7,7 @@ import socket
 import threading
 import time
 import ipaddress
+import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Tuple, Optional
 
@@ -37,46 +38,53 @@ class PortScanner:
         """
         # Common service names for quick lookup
         common_services = {
-            20: 'FTP-DATA', 21: 'FTP', 22: 'SSH', 23: 'Telnet', 25: 'SMTP',
-            53: 'DNS', 80: 'HTTP', 443: 'HTTPS', 3306: 'MySQL', 5432: 'PostgreSQL',
-            27017: 'MongoDB', 6379: 'Redis', 5000: 'Flask'
+            5000: 'Flask/Web Server'  # Main service running
         }
         
         try:
-            # Handle localhost cases
-            if host in ['127.0.0.1', 'localhost', '::1']:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            else:
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            
-            sock.settimeout(self.timeout)
-            result = sock.connect_ex((host, port))
-            
-            if result == 0:
-                # First try common services dict
-                service = common_services.get(port)
-                if not service:
-                    # Then try system service lookup
-                    try:
-                        service = socket.getservbyport(port)
-                    except OSError:
-                        service = "Unknown"
-                
-                # Try to get additional service info
+            # Try both IPv4 and IPv6
+            for socket_family in [socket.AF_INET, socket.AF_INET6]:
                 try:
-                    if port in [80, 8080]:
-                        sock.send(b"HEAD / HTTP/1.0\r\n\r\n")
-                        response = sock.recv(1024).decode('utf-8', 'ignore')
-                        if "Server:" in response:
-                            service = f"HTTP ({response.split('Server:')[1].split('\\r')[0].strip()})"
-                except:
-                    pass
-                
-                sock.close()
-                return (host, port, True, service)
-            else:
-                sock.close()
-                return (host, port, False, "Closed")
+                    sock = socket.socket(socket_family, socket.SOCK_STREAM)
+                    sock.settimeout(self.timeout)
+                    
+                    # Adjust address based on socket family
+                    if socket_family == socket.AF_INET:
+                        address = host
+                    else:
+                        # Skip IPv6 if not a localhost scan
+                        if host not in ['127.0.0.1', 'localhost', '::1']:
+                            continue
+                        address = '::1'
+                    
+                    result = sock.connect_ex((address, port))
+                    
+                    if result == 0:
+                        # Get service name
+                        service = common_services.get(port, "Unknown")
+                        if service == "Unknown":
+                            try:
+                                service = socket.getservbyport(port)
+                            except OSError:
+                                pass
+                        
+                        # Try to get additional service info for HTTP
+                        try:
+                            if port in [80, 8080, 5000]:
+                                sock.send(b"HEAD / HTTP/1.0\r\n\r\n")
+                                response = sock.recv(1024).decode('utf-8', 'ignore')
+                                if "Server:" in response:
+                                    service = f"{service} ({response.split('Server:')[1].split('\\r')[0].strip()})"
+                        except:
+                            pass
+                        
+                        sock.close()
+                        return (host, port, True, service)
+                    sock.close()
+                except socket.error:
+                    continue
+                    
+            return (host, port, False, "Closed")
                 
         except socket.gaierror:
             return (host, port, False, "Host not found")
@@ -176,24 +184,24 @@ class PortScanner:
         Returns:
             True if host responds, False otherwise
         """
-        # Always consider localhost as alive
+        # For localhost, just check if we can connect to port 5000
         if host in ['127.0.0.1', 'localhost', '::1']:
-            return True
-            
-        # Check most common ports
-        check_ports = [80, 443, 22, 5000]  # Reduced list for faster scanning
-        
-        for port in check_ports:
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                    sock.settimeout(1.0)  # Increased timeout for better reliability
-                    if sock.connect_ex((host, port)) == 0:
+                    sock.settimeout(1.0)
+                    if sock.connect_ex((host, 5000)) == 0:
                         return True
-            except socket.gaierror:
-                return False  # DNS resolution failed
-            except socket.error:
-                continue
-        return True  # Consider host alive even if no ports are open
+            except:
+                pass
+            return True  # Consider localhost always alive
+            
+        # For remote hosts
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                sock.settimeout(1.0)
+                return sock.connect_ex((host, 5000)) == 0
+        except:
+            return False
     
     def get_common_ports(self) -> List[int]:
         """
@@ -203,9 +211,13 @@ class PortScanner:
             List of common port numbers
         """
         return [
-            20, 21, 22, 23, 25, 53, 67, 68, 69, 80, 88, 110, 111, 123, 135, 137, 138, 139,
-            143, 161, 162, 389, 443, 445, 500, 514, 515, 631, 636, 993, 995, 1433, 1434,
-            1521, 1723, 3306, 3389, 5000, 5432, 5900, 5985, 5986, 8080, 8443, 27017
+            5000,  # Flask web server
+            80,    # HTTP
+            443,   # HTTPS
+            8080,  # Alternative HTTP
+            3000,  # Development servers
+            4000,  # Development servers
+            8000   # Development servers
         ]
     
     def get_port_range(self, start: int, end: int) -> List[int]:
